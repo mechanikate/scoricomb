@@ -42,9 +42,15 @@ def presavev2(fn,max_sqrt=1):
 				res=filterdown(res,a,b)
 				dict[str(a)+"-"+str(b)] = [list(r) for r in res]
 		except KeyboardInterrupt:
+			dict["6-0"].extend([([3,3],[0,0]),([2,2,2],[0,0,0])])
+			dict["7-0"].extend([([3,2,2],[0,0,0])])
+			dict["8-0"].extend([([3,3,2],[0,0,0]),([2,2,2,2],[0,0,0,0]),([6,2],[0,0])])
 			with open(fn, "wb+") as f:
 				pickle.dump(dict, f)
 			return 1
+	dict["6-0"].extend([([3,3],[0,0]),([2,2,2],[0,0,0])])
+	dict["7-0"].extend([([3,2,2],[0,0,0])])
+	dict["8-0"].extend([([3,3,2],[0,0,0]),([2,2,2,2],[0,0,0,0]),([6,2],[0,0])])
 	with open(fn, "wb+") as f:
 		pickle.dump(dict,f)
 	return 0

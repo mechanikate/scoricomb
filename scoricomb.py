@@ -152,10 +152,16 @@ def perm(a,b,fn="prestored_paths.pkl"):
 	nres = filterdown(res,a,b)
 	res=nres
 	print("Minified to "+str(len(res))+" permutation(s)")
-	print("(Up to) First 5 combinations:")
-	for i in range(-1,-6,-1):
-		print(str(abs(i))+".")
-		print(pretty_print(res[i-1]))
+	if(len(res) >= 5):
+		print("First 5 combinations:")
+		for i in range(-1,-6,-1):
+			print(str(abs(i))+".")
+			print(pretty_print(res[i-1]))
+	else:
+		print("First "+str(len(res))+" combinations:")
+		for i in range(len(res)):
+			print(str(abs(i))+".")
+			print(pretty_print(res[i-1]))
 	tot=0
 	c=0
 	for r in res:
