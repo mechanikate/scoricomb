@@ -1,20 +1,29 @@
-import math,os,gc,sys,pickle
+import math,os,gc,sys,pickle,argparse,scoriserial
 from multiprocessing import Pool, cpu_count
 from functools import reduce
 from decimal import Decimal as D
 from decimal import getcontext
 gc.enable()
-max_cores = 15
-getcontext().prec = 100
+parser = argparse.ArgumentParser(
+	prog="scoricomb",
+	description="Calculates every permutation for plays to get to a NFL score")
+parser.add_argument("a")
+parser.add_argument("b")
+parser.add_argument("-o", "--output", default="")
+parser.add_argument("-c", "--cache", action="store_true")
+parser.add_argument("-C", "--cores", default="2")
+# getcontext().prec = 100 # for higher rarity score calculation precision
 score_ways_one_dir = [(2,0),(3,0),(6,0),(6,1),(7,0),(8,0)]
 score_ways = [e for e in score_ways_one_dir]
 score_ways.extend([e[::-1] for e in score_ways_one_dir])
 min_score_paths = {}
-def get_prestored(fn="prestored_paths.pkl"):
+def get_prestored(fn="prestored_paths.scoricomb",dict={}):
 	global min_score_paths
-	with open(fn, "rb") as f:
-		min_score_paths=pickle.load(f)
-def add_to_prestored(a,b,perms,fn="prestored_paths.pkl"):
+	if(fn==None):
+		min_score_paths=dict
+		return
+	min_score_paths=scoriserial.read_all(fn)
+def add_to_prestored(a,b,perms,fn="prestored_paths.scoricomb"):
 	msp={}
 	with open(fn, "rb") as f:
 		msp=pickle.load(f)
@@ -53,8 +62,8 @@ def dflatten(li):
 		else:
 			res.append(e)
 	return res
-def recursion(a,b,paths,ap,bp,lvl,epat,final,resultant):
-	ap,bp,pprev,fls,finl=subperm(a, b, paths, ap, bp, lvl=lvl, epat=epat)
+def recursion(a,b,paths,ap,bp,lvl,epat,max_cores,final,resultant):
+	ap,bp,pprev,fls,finl=subperm(a, b, paths, ap, bp, lvl=lvl, epat=epat, max_cores=max_cores)
 	final = finl
 	resultant = []
 	if(fls[1]==0):
@@ -64,14 +73,12 @@ def recursion(a,b,paths,ap,bp,lvl,epat,final,resultant):
 	return final,resultant
 def max_time(a,b):
 	return len(score_ways)**(a//2+b//2)
-def subperm(a,b,paths=[],a_path=[],b_path=[],flags=[0,0,0],lvl=0,epat=""):
+def subperm(a,b,paths=[],a_path=[],b_path=[],flags=[0,0,0],lvl=0,epat="",max_cores=2):
 	global total
-	proc_filename="/tmp/scoricomb/"+str(a)+"-"+str(b)+".pkl"
 	final,resultant=([],[])
 	total+=1
-
-	if(total % 255 == 0):
-		print(total, end=epat+"\r")
+	#if(total % 255 == 0):
+	print(total, end=epat+"\r")
 	if(a<0 or b<0 or (a,b) in dead_ends):
 		return [0],[0],paths,[1,1,flags[2]],final
 	p=str(a)+"-"+str(b)
@@ -98,14 +105,14 @@ def subperm(a,b,paths=[],a_path=[],b_path=[],flags=[0,0,0],lvl=0,epat=""):
 	if(lvl == 0):
 		pool = Pool(processes=max_cores)
 		for i,p in enumerate(score_ways): # get rest of paths
-			arglist.append((a-p[0],b-p[1],paths,a_path+[p[0]],b_path+[p[1]],lvl+1,epat,final,resultant))
+			arglist.append((a-p[0],b-p[1],paths,a_path+[p[0]],b_path+[p[1]],lvl+1,epat,max_cores,final,resultant))
 		res_tuple = pool.starmap(recursion,arglist)
 		for finall,resultantt in res_tuple:
 			final.extend(finall)
 			resultant.extend(resultantt)
 	else:
 		for p in score_ways:
-			finall,resultantt=recursion(a-p[0],b-p[1],paths,a_path+[p[0]],b_path+[p[1]],lvl+1,epat,final,resultant)
+			finall,resultantt=recursion(a-p[0],b-p[1],paths,a_path+[p[0]],b_path+[p[1]],lvl+1,epat,max_cores,final,resultant)
 			final.extend(finall)
 			resultant.extend(resultantt)
 	for r in resultant:
@@ -114,6 +121,7 @@ def subperm(a,b,paths=[],a_path=[],b_path=[],flags=[0,0,0],lvl=0,epat=""):
 	if(lvl > 0):
 		return a_path, b_path, paths, [0,1,flags[2]], final
 	print(str(a)+"-"+str(b)+": Found "+str(len(final))+" base permutations                               ")
+	total=0
 	return [],[],paths,[2,2],final
 
 def remove_vals(arr,removables=[[]]):
@@ -146,16 +154,22 @@ def filterdown(res,av,bv):
 	return [res[i] for i in include]
 def pretty_print(scorelist):
 	return "\n".join([names[e] for e in tuple(zip(*scorelist))[::-1]])
-def perm(a,b,fn="prestored_paths.pkl"):
+def perm(a,b,fn="prestored_paths.pkl",results_fn="",max_cores=2,out_file_pattern="permutations_{a}-{b}.txt",cache_results=True):
 	global total
-	_,_,_,_,res = subperm(a,b,epat="/"+str(max_time(a,b)))
+	_,_,_,_,res = subperm(a,b,epat="/"+str(max_time(a,b)),max_cores=max_cores)
 	nres = filterdown(res,a,b)
 	res=nres
 	print("Minified to "+str(len(res))+" permutation(s)")
-	print("(Up to) First 5 combinations:")
-	for i in range(-1,-6,-1):
-		print(str(abs(i))+".")
-		print(pretty_print(res[i-1]))
+	if(len(res) >= 5):
+		print("First 5 combinations:")
+		for i in range(-1,-6,-1):
+			print(str(abs(i))+".")
+			print(pretty_print(res[i-1]))
+	else:
+		print("First "+str(len(res))+" combinations:")
+		for i in range(len(res)):
+			print(str(abs(i))+".")
+			print(pretty_print(res[i-1]))
 	tot=0
 	c=0
 	for r in res:
@@ -186,22 +200,22 @@ def perm(a,b,fn="prestored_paths.pkl"):
 	fff+="\nMax permutations to score: "+str(len(res))
 	fff+="\nNote: rarity score is a terrible metric, it's usually better to judge via max permutations to A-B score or if all the permutations have a 6-1 score"
 	if(all_permuts_have_6_1):
-		fff+="\nNote: \u221E rarity score is usually caused with insanely high scores, or all permutations requiring a 6-1 scoring event (e.g. final scores of 6-1, 10-1, 999-1)"
+		fff+="\nNote: \u221E rarity score is usually caused with insanely high final scores or all permutations requiring a 6-1 scoring event (e.g. final scores of 6-1, 10-1, 999-1)"
 	total=0
-	if(input("Save? (y/[n]) ") in ["y","Y","yes"]):
-		with open("permutations_"+str(a)+"-"+str(b)+".txt", "w+") as f:
+	if(results_fn not in ["", None, "n", "false"]):
+		real_name=results_fn.replace("{a}", str(a)).replace("{b}", str(b))
+		with open(real_name, "w+") as f:
 			arr=[pretty_print(tally) for tally in res]
 			text="GOAL SCORE: "+str(a)+"-"+str(b)+"\n"+str(len(res))+" permutations\n---\n"+"\n".join([str(i+1)+". \n"+e for i,e in enumerate(arr)])
 			f.write(text)
-	if(input("Add to database for faster future computations? ([y]/n)") not in ["n","N","no"]):
+	if(cache_results in ["y","Y",True,"yes"]):
 		add_to_prestored(a,b,res,fn=fn)
 
 	return fff
 if __name__ == "__main__":
+	parsed = parser.parse_args()
 	get_prestored()
-	tas=int(input("Team A score: "))
-	tbs=int(input("Team B score: "))
 	try:
-		print(perm(tas,tbs))
+		print(perm(int(parsed.a),int(parsed.b),max_cores=int(parsed.cores), results_fn=parsed.output, cache_results=parsed.cache))
 	except Exception as e:
-		pass
+		print(e)

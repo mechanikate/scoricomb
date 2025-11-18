@@ -3,3 +3,9 @@ __pycache__/
 *.pkl
 *.old
 *.old*
+*.working
+*.scoricomb
+*.txt
+*.tmp
+*.pickle
+personal/*
